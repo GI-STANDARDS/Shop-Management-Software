@@ -1,0 +1,3 @@
+Admin: admin / admin123 (PIN: 1234)
+Manager: manager / manager123 (PIN: 9012)
+Cashier: cashier / cashier123 (PIN: 5678)

@@ -1,0 +1,36 @@
+<div class="page-header">
+  <h1>Suppliers</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="showSupplierModal()">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      Add Supplier
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="suppliersList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+let currentPage = 1;
+document.addEventListener('DOMContentLoaded', () => loadSuppliers());
+async function loadSuppliers() {
+  const res = await API.get('/suppliers', { page: currentPage, limit: 20 });
+  const el = document.getElementById('suppliersList');
+  if ((res.rows || []).length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="truck"></svg><p>No suppliers</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Name</th><th>Contact</th><th>Phone</th><th>Email</th><th class="text-right">Actions</th></tr></thead><tbody>' +
+    res.rows.map(s => '<tr><td><span class="font-medium">' + escapeHtml(s.name) + '</span></td><td>' + escapeHtml(s.contact_person || '-') + '</td><td>' + escapeHtml(s.phone || '-') + '</td><td>' + escapeHtml(s.email || '-') + '</td><td class="cell-actions" style="justify-content:flex-end"><button class="btn btn-sm btn-ghost" style="color:var(--color-danger)" onclick="deleteSupplier(' + s.id + ')"><svg data-lucide="trash-2" style="width:14px;height:14px"></svg></button></td></tr>').join('') +
+    '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+}
+async function showSupplierModal() {
+  const name = prompt('Supplier name:');
+  if (!name) return;
+  try { await API.post('/suppliers', { name }); showToast('Created', 'success'); await loadSuppliers(); } catch(e) { showToast(e.message, 'error'); }
+}
+async function deleteSupplier(id) {
+  if (!confirm('Delete?')) return;
+  try { await API.delete('/suppliers/' + id); showToast('Deleted', 'success'); await loadSuppliers(); } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

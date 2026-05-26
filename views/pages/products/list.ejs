@@ -1,0 +1,57 @@
+<div class="page-header">
+  <h1>Products</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="window.location.href='/app/products/new'">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      Add Product
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="productsTable">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  let currentSearch = '';
+  let currentPage = 1;
+  const loadData = async (page = 1, search = '') => {
+    currentPage = page;
+    currentSearch = search;
+    const params = { page, limit: 20 };
+    if (search) params.search = search;
+    const res = await API.get('/products', params);
+    const table = new DataTable('productsTable', {
+      columns: [
+        { label: 'Name', field: 'name', render: r => `<a href="/app/products/${r.id}" class="link">${escapeHtml(r.name)}</a>` },
+        { label: 'SKU', field: 'sku' },
+        { label: 'Price', field: 'selling_price', render: r => formatCurrency(r.selling_price) },
+        { label: 'Stock', field: 'stock_quantity', render: r => `<span style="font-weight:600;color:${r.stock_quantity <= r.min_stock_level ? 'var(--color-danger)' : 'var(--color-success)'}">${r.stock_quantity}</span>` },
+        { label: 'Category', field: 'category_name' },
+      ],
+      actions: r => `
+        <button class="btn btn-sm btn-ghost" onclick="window.location.href='/app/products/${r.id}'" title="View">
+          <svg data-lucide="eye" style="width:14px;height:14px"></svg>
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="window.location.href='/app/products/${r.id}/edit'" title="Edit">
+          <svg data-lucide="pencil" style="width:14px;height:14px"></svg>
+        </button>
+        <button class="btn btn-sm btn-ghost" style="color:var(--color-danger)" onclick="deleteProduct(${r.id})" title="Delete">
+          <svg data-lucide="trash-2" style="width:14px;height:14px"></svg>
+        </button>
+      `,
+      onSearch: (q) => loadData(1, q),
+      onPageChange: (p) => loadData(p, currentSearch),
+    });
+    table.render(res.rows, res.total);
+    try { lucide.createIcons(); } catch(e) {}
+  };
+  await loadData();
+});
+async function deleteProduct(id) {
+  if (!confirm('Delete this product?')) return;
+  try { await API.delete('/products/' + id); showToast('Product deleted', 'success'); window.location.reload(); }
+  catch (e) { showToast(e.message, 'error'); }
+}
+</script>

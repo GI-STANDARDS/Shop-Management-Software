@@ -1,0 +1,173 @@
+<div class="page-header">
+  <h1 id="detailTitle">Product Detail</h1>
+  <div class="page-actions">
+    <button class="btn btn-outline" onclick="window.location.href='/app/products/' + productId + '/edit'">
+      <svg data-lucide="pencil" style="width:16px;height:16px"></svg>
+      Edit
+    </button>
+  </div>
+</div>
+
+<div id="productDetail"><div class="loading-spinner"></div></div>
+
+<div class="card" style="margin-top:var(--space-lg)">
+  <div class="card-header"><h3>Stock Movement History</h3></div>
+  <div class="card-body" id="movementsList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="restockModal" style="display:none">
+  <div class="modal-content" style="max-width:420px">
+    <div class="modal-header">
+      <h3 id="restockModalTitle">Restock Product</h3>
+      <button class="modal-close" onclick="closeRestockModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Quantity to Add</label>
+        <input class="form-input" type="number" id="restockQty" value="10" min="1" step="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason</label>
+        <input class="form-input" type="text" id="restockNote" placeholder="e.g. Supplier delivery">
+      </div>
+      <div id="restockResult" style="display:none" class="text-sm"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeRestockModal()">Cancel</button>
+      <button class="btn btn-primary" id="doRestockBtn">Add Stock</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let productId;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  productId = window.location.pathname.match(/\/products\/(\d+)/)?.[1];
+  if (!productId) { document.getElementById('productDetail').innerHTML = '<div class="empty-state"><svg data-lucide="package"></svg><p>Product not found</p></div>'; return; }
+  await loadProduct();
+  await loadMovements();
+});
+
+async function loadProduct() {
+  try {
+    const p = await API.get('/products/' + productId);
+    document.getElementById('detailTitle').textContent = escapeHtml(p.name);
+    const stockColor = (p.stock_quantity || 0) <= 0 ? 'var(--color-danger)' : (p.stock_quantity || 0) <= (p.min_stock_level || 0) ? 'var(--color-warning)' : 'var(--color-success)';
+    const stockLabel = (p.stock_quantity || 0) <= 0 ? 'Out of Stock' : (p.stock_quantity || 0) <= (p.min_stock_level || 0) ? 'Low Stock' : 'In Stock';
+
+    document.getElementById('productDetail').innerHTML = `
+      <div class="card"><div class="card-body">
+        <div class="flex items-center gap-lg mb-md">
+          <div class="stat-icon" style="background:var(--color-primary-subtle);width:56px;height:56px;border-radius:var(--radius-lg)">
+            <svg data-lucide="package" style="width:28px;height:28px;color:var(--color-primary)"></svg>
+          </div>
+          <div>
+            <h2 style="font-size:var(--font-xl)">${escapeHtml(p.name)}</h2>
+            <span class="badge badge-ghost">SKU: ${p.sku || 'N/A'}</span>
+            ${p.barcode ? `<span class="badge badge-ghost" style="margin-left:4px">Barcode: ${escapeHtml(p.barcode)}</span>` : ''}
+          </div>
+        </div>
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+          <div class="stat-card">
+            <div class="stat-info">
+              <div class="stat-label">Selling Price</div>
+              <div class="stat-value" style="font-size:var(--font-lg);color:var(--color-primary)">${formatCurrency(p.selling_price)}</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-info">
+              <div class="stat-label">Cost Price</div>
+              <div class="stat-value" style="font-size:var(--font-lg);color:var(--color-text-secondary)">${formatCurrency(p.cost_price)}</div>
+            </div>
+          </div>
+          <div class="stat-card" onclick="showRestockModal('${escapeHtml(p.name)}')" style="cursor:pointer">
+            <div class="stat-info">
+              <div class="stat-label">Current Stock <span style="font-size:10px;color:var(--color-primary)">(click to restock)</span></div>
+              <div class="stat-value" style="font-size:var(--font-lg);color:${stockColor}">${p.stock_quantity || 0} ${p.unit || ''}</div>
+              <div class="stat-label" style="color:${stockColor}">${stockLabel}</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-info">
+              <div class="stat-label">Min Stock Level</div>
+              <div class="stat-value" style="font-size:var(--font-lg)">${p.min_stock_level || 0}</div>
+            </div>
+          </div>
+        </div>
+        ${p.description ? `<div class="mt-md text-sm text-secondary">${escapeHtml(p.description)}</div>` : ''}
+        <div style="margin-top:var(--space-md);display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="showRestockModal('${escapeHtml(p.name)}')">
+            <svg data-lucide="plus-circle" style="width:16px;height:16px"></svg>
+            Restock / Add Stock
+          </button>
+        </div>
+      </div></div>`;
+    try { lucide.createIcons(); } catch(e) {}
+  } catch(e) { document.getElementById('productDetail').innerHTML = '<div class="empty-state"><svg data-lucide="package"></svg><p>Failed to load product</p></div>'; }
+}
+
+async function loadMovements() {
+  try {
+    const res = await API.get('/inventory/' + productId + '/movements', { limit: 20 });
+    const rows = res.rows || [];
+    const el = document.getElementById('movementsList');
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty-state"><svg data-lucide="clock"></svg><p>No stock movements yet</p></div>';
+    } else {
+      el.innerHTML = '<table class="data-table"><thead><tr><th>Date</th><th>Type</th><th>Quantity</th><th>Notes</th><th>By</th></tr></thead><tbody>' +
+        rows.map(m => `<tr>
+          <td class="text-sm">${formatDate(m.created_at)}</td>
+          <td><span class="badge badge-${m.type === 'purchase' || m.type === 'restock' || m.type === 'return' ? 'success' : m.type === 'sale' ? 'info' : 'warning'}">${m.type}</span></td>
+          <td class="font-semibold">${m.quantity}</td>
+          <td class="text-sm text-secondary">${escapeHtml(m.notes || '')}</td>
+          <td class="text-sm">${escapeHtml(m.created_by_name || '')}</td>
+        </tr>`).join('') +
+        '</tbody></table>';
+    }
+    try { lucide.createIcons(); } catch(e) {}
+  } catch(e) { document.getElementById('movementsList').innerHTML = '<div class="text-sm text-danger">Error loading history</div>'; }
+}
+
+function showRestockModal(productName) {
+  document.getElementById('restockModalTitle').textContent = `Restock: ${productName}`;
+  document.getElementById('restockQty').value = 10;
+  document.getElementById('restockNote').value = '';
+  document.getElementById('restockResult').style.display = 'none';
+  document.getElementById('restockModal').style.display = 'flex';
+  document.getElementById('restockQty').focus();
+  document.getElementById('restockQty').select();
+}
+
+function closeRestockModal() {
+  document.getElementById('restockModal').style.display = 'none';
+}
+
+document.getElementById('doRestockBtn')?.addEventListener('click', async () => {
+  const qty = parseInt(document.getElementById('restockQty').value) || 10;
+  const notes = document.getElementById('restockNote').value.trim() || 'Restocked from product page';
+  const btn = document.getElementById('doRestockBtn');
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+  try {
+    const res = await API.post('/inventory/restock/' + productId, { quantity: qty, notes });
+    document.getElementById('restockResult').style.display = 'block';
+    document.getElementById('restockResult').innerHTML = `<span style="color:var(--color-success)">✓ Added ${qty} units. Previous: ${res.previous_qty}, New: ${res.new_qty}</span>`;
+    btn.textContent = 'Done!';
+    await loadProduct();
+    await loadMovements();
+    setTimeout(closeRestockModal, 1500);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Add Stock';
+  }
+});
+
+// Close modal on overlay click
+document.getElementById('restockModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeRestockModal();
+});
+</script>

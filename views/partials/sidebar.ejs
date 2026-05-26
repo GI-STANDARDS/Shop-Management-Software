@@ -1,0 +1,102 @@
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-icon">S</div>
+    <div class="sidebar-brand-text">
+      <h2>StorePOS</h2>
+      <span>Management System</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">Main</div>
+    <a href="/app/dashboard" class="sidebar-link <% if (currentPage === 'dashboard') { %>active<% } %>">
+      <span class="link-icon" data-lucide="layout-dashboard"></span>
+      <span>Dashboard</span>
+    </a>
+    <a href="/app/pos" class="sidebar-link <% if (currentPage === 'pos') { %>active<% } %>">
+      <span class="link-icon" data-lucide="shopping-cart"></span>
+      <span>POS / Billing</span>
+    </a>
+
+    <div class="sidebar-section">Inventory</div>
+    <a href="/app/products" class="sidebar-link <% if (currentPage === 'products') { %>active<% } %>">
+      <span class="link-icon" data-lucide="package"></span>
+      <span>Products</span>
+    </a>
+    <% if (!user || user.role !== 'cashier') { %>
+    <a href="/app/categories" class="sidebar-link <% if (currentPage === 'categories') { %>active<% } %>">
+      <span class="link-icon" data-lucide="tags"></span>
+      <span>Categories</span>
+    </a>
+    <a href="/app/inventory" class="sidebar-link <% if (currentPage === 'inventory') { %>active<% } %>">
+      <span class="link-icon" data-lucide="warehouse"></span>
+      <span>Stock</span>
+      <span class="link-badge" id="lowStockBadge" style="display:none">0</span>
+    </a>
+    <% } %>
+
+    <div class="sidebar-section">Transactions</div>
+    <% if (!user || user.role !== 'cashier') { %>
+    <a href="/app/purchases" class="sidebar-link <% if (currentPage === 'purchases') { %>active<% } %>">
+      <span class="link-icon" data-lucide="truck"></span>
+      <span>Purchases</span>
+    </a>
+    <a href="/app/expenses" class="sidebar-link <% if (currentPage === 'expenses') { %>active<% } %>">
+      <span class="link-icon" data-lucide="wallet"></span>
+      <span>Expenses</span>
+    </a>
+    <% } %>
+    <a href="/app/sales" class="sidebar-link <% if (currentPage === 'sales') { %>active<% } %>">
+      <span class="link-icon" data-lucide="receipt"></span>
+      <span>Sales</span>
+    </a>
+
+    <div class="sidebar-section">People</div>
+    <a href="/app/customers" class="sidebar-link <% if (currentPage === 'customers') { %>active<% } %>">
+      <span class="link-icon" data-lucide="users"></span>
+      <span>Customers</span>
+    </a>
+    <% if (!user || user.role !== 'cashier') { %>
+    <a href="/app/suppliers" class="sidebar-link <% if (currentPage === 'suppliers') { %>active<% } %>">
+      <span class="link-icon" data-lucide="truck"></span>
+      <span>Suppliers</span>
+    </a>
+    <% } %>
+
+    <% if (user && user.role !== 'cashier') { %>
+    <div class="sidebar-section">Reports</div>
+    <a href="/app/reports" class="sidebar-link <% if (currentPage === 'reports') { %>active<% } %>">
+      <span class="link-icon" data-lucide="bar-chart-3"></span>
+      <span>Reports</span>
+    </a>
+    <% } %>
+
+    <% if (user && user.role === 'admin') { %>
+    <div class="sidebar-section">Administration</div>
+    <a href="/app/employees" class="sidebar-link <% if (currentPage === 'employees') { %>active<% } %>">
+      <span class="link-icon" data-lucide="user-round"></span>
+      <span>Employees</span>
+    </a>
+    <a href="/app/backup" class="sidebar-link <% if (currentPage === 'backup') { %>active<% } %>">
+      <span class="link-icon" data-lucide="database"></span>
+      <span>Backup</span>
+    </a>
+    <a href="/app/settings" class="sidebar-link <% if (currentPage === 'settings') { %>active<% } %>">
+      <span class="link-icon" data-lucide="settings"></span>
+      <span>Settings</span>
+    </a>
+    <% } %>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="user-avatar" id="userAvatar">A</div>
+      <div class="user-info">
+        <div class="user-name" id="userName">
+          <%= user ? (user.full_name || user.username) : 'Guest' %>
+        </div>
+        <div class="user-role" id="userRole">
+          <%= user ? (user.role_name || user.role) : 'Not logged in' %>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>

@@ -1,0 +1,20 @@
+<div class="page-header">
+  <h1>Customers</h1>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="customersList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const res = await API.get('/customers', { limit: 50 });
+  const el = document.getElementById('customersList');
+  const rows = res.rows || [];
+  if (rows.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="users"></svg><p>No customers</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Purchases</th><th>Points</th></tr></thead><tbody>' +
+    rows.map(c => '<tr><td><span class="font-medium">' + escapeHtml(c.name) + '</span></td><td>' + escapeHtml(c.phone || '-') + '</td><td>' + escapeHtml(c.email || '-') + '</td><td class="font-medium">' + formatCurrency(c.total_purchases) + '</td><td><span class="badge badge-primary">' + (c.loyalty_points || 0) + ' pts</span></td></tr>').join('') +
+    '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+});
+</script>

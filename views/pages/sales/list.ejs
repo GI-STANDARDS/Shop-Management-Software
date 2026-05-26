@@ -1,0 +1,30 @@
+<div class="page-header">
+  <h1>Sales History</h1>
+  <div class="page-actions">
+    <button class="btn btn-outline btn-sm" onclick="window.location.href='/app/pos'">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      New Sale
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="salesList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const res = await API.get('/sales', { limit: 30 });
+  const el = document.getElementById('salesList');
+  const rows = res.rows || [];
+  if (rows.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="receipt"></svg><p>No sales yet</p><p class="empty-sub">Start by creating a sale at the POS</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Invoice</th><th>Customer</th><th>User</th><th>Total</th><th>Method</th><th>Date</th><th class="text-right">Actions</th></tr></thead><tbody>' +
+    rows.map(s => '<tr><td><span class="font-medium">' + escapeHtml(s.invoice_number) + '</span></td><td>' + escapeHtml(s.customer_name || 'Walk-in') + '</td><td>' + escapeHtml(s.user_name) + '</td><td><span class="font-semibold">' + formatCurrency(s.grand_total) + '</span></td><td><span class="badge badge-ghost">' + (s.payment_method || '-') + '</span></td><td class="text-sm text-secondary">' + formatDate(s.created_at) + '</td><td class="cell-actions" style="justify-content:flex-end"><button class="btn btn-sm btn-ghost" onclick="window.open(\'/app/sales/' + s.id + '\',\'_blank\')">' +
+    '<svg data-lucide="eye" style="width:14px;height:14px"></svg></button>' + (s.status === 'completed' ? '<button class="btn btn-sm btn-ghost" style="color:var(--color-danger)" onclick="refundSale(' + s.id + ')"><svg data-lucide="rotate-ccw" style="width:14px;height:14px"></svg></button>' : '') + '</td></tr>').join('') + '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+});
+async function refundSale(id) {
+  if (!confirm('Refund this sale?')) return;
+  try { await API.put('/sales/' + id + '/refund'); showToast('Sale refunded', 'success'); window.location.reload(); } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

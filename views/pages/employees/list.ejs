@@ -1,0 +1,39 @@
+<div class="page-header">
+  <h1>Employees</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="showEmployeeModal()">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      Add Employee
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="employeesList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const res = await API.get('/employees', { limit: 50 });
+  const el = document.getElementById('employeesList');
+  const rows = res.rows || [];
+  if (rows.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="user-round"></svg><p>No employees</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Shift</th><th>Status</th><th class="text-right">Actions</th></tr></thead><tbody>' +
+    rows.map(u => '<tr><td><span class="font-medium">' + escapeHtml(u.full_name) + '</span></td><td>' + escapeHtml(u.username) + '</td><td><span class="badge badge-info">' + escapeHtml(u.role_name) + '</span></td><td>' + (u.shift || '-') + '</td><td>' + (u.is_active ? '<span class="badge badge-success"><span class="badge-dot success"></span>Active</span>' : '<span class="badge badge-danger"><span class="badge-dot danger"></span>Inactive</span>') + '</td><td class="cell-actions" style="justify-content:flex-end"><button class="btn btn-sm btn-ghost" onclick="toggleEmployee(' + u.id + ')">' + (u.is_active ? '<svg data-lucide="pause" style="width:14px;height:14px"></svg>' : '<svg data-lucide="play" style="width:14px;height:14px"></svg>') + '</button></td></tr>').join('') +
+    '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+});
+async function showEmployeeModal() {
+  const username = prompt('Username:');
+  if (!username) return;
+  const fullName = prompt('Full name:');
+  if (!fullName) return;
+  const roleId = prompt('Role ID (1=Admin, 2=Manager, 3=Cashier):');
+  if (!roleId) return;
+  try { await API.post('/employees', { username, full_name: fullName, role_id: parseInt(roleId), password: 'password123' }); showToast('Employee created (password: password123)', 'success'); window.location.reload(); }
+  catch(e) { showToast(e.message, 'error'); }
+}
+async function toggleEmployee(id) {
+  try { await API.put('/employees/' + id, { is_active: false }); showToast('Updated', 'success'); window.location.reload(); } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

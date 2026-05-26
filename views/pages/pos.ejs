@@ -1,0 +1,621 @@
+<div class="pos-page">
+  <div class="pos-left">
+    <div class="pos-header">
+      <div class="pos-search-bar">
+        <div class="search-wrapper">
+          <svg data-lucide="search"></svg>
+          <input type="text" id="posSearch" placeholder="Search by name, barcode or SKU... (F2)" autofocus>
+        </div>
+        <button class="btn btn-outline btn-icon" onclick="document.getElementById('posSearch').focus()" title="Focus search">
+          <svg data-lucide="search"></svg>
+        </button>
+      </div>
+    </div>
+    <div class="pos-categories" id="posCategories">
+      <button class="pos-category-tab active" data-cat="all">All</button>
+    </div>
+    <div class="pos-products" id="posProducts">
+      <div class="loading-spinner"></div>
+    </div>
+  </div>
+
+  <div class="pos-right" id="posRight">
+    <div class="pos-cart-header">
+      <h3>
+        <svg data-lucide="shopping-cart" style="width:18px;height:18px;vertical-align:middle;margin-right:6px"></svg>
+        Current Sale
+      </h3>
+      <button class="btn btn-sm btn-ghost" onclick="POS.clearCart()">
+        <svg data-lucide="trash-2" style="width:14px;height:14px"></svg>
+        Clear
+      </button>
+    </div>
+    <div class="pos-customer-badge" id="posCustomerBadge" style="display:none">
+      <svg data-lucide="user" style="width:14px;height:14px"></svg>
+      <span id="posCustomerName"></span>
+      <button class="btn btn-sm btn-ghost" onclick="POS.clearCustomer()" title="Remove customer">
+        <svg data-lucide="x" style="width:12px;height:12px"></svg>
+      </button>
+    </div>
+    <div class="pos-cart-items" id="posCartItems">
+      <div class="empty-state">
+        <svg data-lucide="shopping-bag"></svg>
+        <p>Cart is empty</p>
+        <p class="empty-sub">Click a product or scan barcode to add</p>
+      </div>
+    </div>
+    <div class="pos-cart-summary">
+      <div class="pos-summary-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div>
+      <div class="pos-summary-row"><span>Tax</span><span id="cartTax">$0.00</span></div>
+      <div class="pos-summary-row"><span>Discount</span><span id="cartDiscount">$0.00</span></div>
+      <div class="pos-summary-row total"><span>Total</span><span id="cartTotal">$0.00</span></div>
+    </div>
+    <div class="pos-payment">
+      <button class="pos-pay-btn" id="payBtn" disabled onclick="POS.openPayment()">
+        Select products to begin
+      </button>
+    </div>
+    <div class="pos-shortcuts">
+      <span class="kbd">F2</span><span class="kbd-hint">Search</span>
+      <span class="kbd">F3</span><span class="kbd-hint">Customer</span>
+      <span class="kbd">+</span><span class="kbd-hint">Qty Up</span>
+      <span class="kbd">-</span><span class="kbd-hint">Qty Down</span>
+      <span class="kbd">*</span><span class="kbd-hint">Select All</span>
+      <span class="kbd">ESC</span><span class="kbd-hint">Cancel</span>
+      <span class="kbd">F12</span><span class="kbd-hint">Pay</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const POS = {
+  cart: [],
+  products: [],
+  categories: [],
+  customer: null,
+  selectedIndex: -1,
+  modalStack: [],
+  usingTestData: false,
+  _activeCategory: 'all',
+
+  async init() {
+    document.getElementById('posSearch').addEventListener('input', this._debounce((e) => this._onSearch(e), 200));
+    document.getElementById('posSearch').addEventListener('keydown', (e) => this._onSearchKeydown(e));
+    this._registerHotkeys();
+    await this.loadProducts();
+    await this.loadCategories();
+    this.renderCart();
+    try { lucide.createIcons(); } catch(e) {}
+  },
+
+  _registerHotkeys() {
+    Keyboard.register('F2', () => {
+      const input = document.getElementById('posSearch');
+      input.focus();
+      input.select();
+    }, true);
+    Keyboard.register('F3', () => this.selectCustomer());
+    Keyboard.register('+', () => this.adjustSelected(1));
+    Keyboard.register('=', () => this.adjustSelected(1));
+    Keyboard.register('-', () => this.adjustSelected(-1));
+    Keyboard.register('*', () => this.selectAll());
+    Keyboard.register('Escape', () => this._handleEscape());
+    Keyboard.register('F12', () => this.openPayment());
+  },
+
+  _handleEscape() {
+    if (this.modalStack.length > 0) {
+      const m = this.modalStack[this.modalStack.length - 1];
+      if (typeof m === 'function') m();
+      else if (m && typeof m.close === 'function') m.close();
+      this.modalStack.pop();
+      return;
+    }
+    if (document.activeElement === document.getElementById('posSearch')) {
+      document.getElementById('posSearch').blur();
+      return;
+    }
+    if (this.selectedIndex >= 0) {
+      this.setSelected(-1);
+      return;
+    }
+    if (this.cart.length > 0) {
+      this.clearCart();
+    }
+  },
+
+  // ---- Products ----
+
+  async loadProducts() {
+    try {
+      const res = await API.get('/products', { limit: 200 });
+      this.products = res.rows || [];
+      if (this.products.length === 0) throw new Error('No products');
+      this.usingTestData = false;
+    } catch (e) {
+      this.products = window.TEST_PRODUCTS || [];
+      this.usingTestData = true;
+    }
+    this._applyFilters();
+    this._updatePayBtn();
+  },
+
+  async loadCategories() {
+    try {
+      if (this.usingTestData) throw new Error('test');
+      this.categories = await API.get('/categories');
+    } catch (e) {
+      this.categories = window.TEST_CATEGORIES || [];
+    }
+    const container = document.getElementById('posCategories');
+    container.innerHTML =
+      '<button class="pos-category-tab active" data-cat="all">All</button>' +
+      this.categories.map(c =>
+        `<button class="pos-category-tab" data-cat="${c.id}">${escapeHtml(c.name)}</button>`
+      ).join('');
+    container.querySelectorAll('.pos-category-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.pos-category-tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        this._activeCategory = btn.dataset.cat;
+        this._applyFilters();
+      });
+    });
+  },
+
+  renderProducts(data) {
+    const grid = document.getElementById('posProducts');
+    const searchQ = document.getElementById('posSearch').value.trim();
+    if (!data || data.length === 0) {
+      if (searchQ && !this.usingTestData) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+          <svg data-lucide="package"></svg>
+          <p>No products found for "${escapeHtml(searchQ)}"</p>
+          <p class="empty-sub">Press Enter to create a quick product</p>
+        </div>`;
+      } else {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><svg data-lucide="package"></svg><p>No products found</p><p class="empty-sub">Try a different search</p></div>';
+      }
+      return;
+    }
+    grid.innerHTML = data.map((p) => `
+      <div class="pos-product-btn" data-pid="${p.id}">
+        <div class="product-price">${formatCurrency(p.selling_price)}</div>
+        <div class="product-name">${escapeHtml(p.name)}</div>
+        <div class="product-stock ${(p.stock_quantity || 0) <= (p.min_stock_level || 0) ? 'low' : ''}">Stock: ${p.stock_quantity || 0}</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.pos-product-btn').forEach(el => {
+      el.addEventListener('click', () => {
+        this.addToCart(parseInt(el.dataset.pid));
+      });
+    });
+  },
+
+  _applyFilters() {
+    let list = this.usingTestData ? (window.TEST_PRODUCTS || this.products) : this.products;
+
+    const catId = this._activeCategory;
+    if (catId !== 'all') {
+      list = list.filter(p => String(p.category_id) === catId);
+    }
+
+    const q = document.getElementById('posSearch').value.trim().toLowerCase();
+    if (q) {
+      list = list.filter(p =>
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.barcode && p.barcode.includes(q)) ||
+        (p.sku && p.sku.toLowerCase().includes(q))
+      );
+    }
+
+    this.renderProducts(list);
+  },
+
+  _onSearch() {
+    this._applyFilters();
+  },
+
+  _onSearchKeydown(e) {
+    if (e.key === 'Enter') {
+      const q = e.target.value.trim();
+      if (!q) return;
+      const list = this.usingTestData ? (window.TEST_PRODUCTS || this.products) : this.products;
+      const found = list.find(p => p.barcode === q || p.sku === q);
+      if (found) {
+        this.addToCart(found.id);
+        e.target.value = '';
+        this._applyFilters();
+      } else if (q.length >= 3 && !this.usingTestData) {
+        this.quickAddProduct(q);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.target.value = '';
+      e.target.blur();
+      this._applyFilters();
+    }
+  },
+
+  async quickAddProduct(barcode) {
+    const name = prompt('Product not found. Enter name to create quick product:', barcode);
+    if (!name || !name.trim()) return;
+    const price = prompt('Enter selling price:', '0');
+    if (!price) return;
+    const sellingPrice = parseFloat(price) || 0;
+    const costPrice = Math.round(sellingPrice * 0.6 * 100) / 100;
+    const sku = 'Q-' + String(Date.now()).slice(-8);
+
+    try {
+      const created = await API.post('/products', {
+        name: name.trim(), sku, barcode,
+        selling_price: sellingPrice, cost_price: costPrice,
+      });
+      this.products.push(created);
+      this.addToCart(created.id);
+      const input = document.getElementById('posSearch');
+      input.value = '';
+      this._applyFilters();
+      input.focus();
+      showToast(`Created + added: ${created.name}`, 'success');
+    } catch (err) {
+      showToast('Failed to create product: ' + err.message, 'error');
+    }
+  },
+
+  // ---- Cart ----
+
+  findProduct(productId) {
+    return this.products.find(p => p.id === productId) ||
+           (window.TEST_PRODUCTS || []).find(p => p.id === productId);
+  },
+
+  addToCart(productId) {
+    const product = this.findProduct(productId);
+    if (!product) { showToast('Product not found', 'error'); return; }
+    if ((product.stock_quantity || 0) <= 0 && !this.usingTestData) { showToast('Out of stock', 'warning'); return; }
+
+    const existing = this.cart.find(c => c.product_id === productId);
+    if (existing) {
+      if (!this.usingTestData && existing.quantity >= (product.stock_quantity || 0)) {
+        showToast('Insufficient stock', 'warning');
+        return;
+      }
+      existing.quantity++;
+      existing.total = existing.quantity * existing.unit_price;
+    } else {
+      this.cart.push({
+        product_id: product.id,
+        name: product.name,
+        barcode: product.barcode,
+        quantity: 1,
+        unit_price: product.selling_price,
+        cost_price: product.cost_price,
+        tax_rate: product.tax_rate || 0,
+        total: product.selling_price,
+      });
+    }
+    this.setSelected(this.cart.length - 1);
+    this.renderCart();
+    showToast(`${product.name} added`, 'success');
+    this._updatePayBtn();
+  },
+
+  removeFromCart(index) {
+    this.cart.splice(index, 1);
+    if (this.selectedIndex >= this.cart.length) this.setSelected(this.cart.length - 1);
+    else this.renderCart();
+    this._updatePayBtn();
+  },
+
+  adjustQty(index, delta) {
+    const item = this.cart[index];
+    if (!item) return;
+    const newQty = item.quantity + delta;
+    if (newQty <= 0) {
+      this.removeFromCart(index);
+      return;
+    }
+    const product = this.findProduct(item.product_id);
+    if (!this.usingTestData && product && newQty > (product.stock_quantity || 0)) {
+      showToast('Insufficient stock', 'warning');
+      return;
+    }
+    item.quantity = newQty;
+    item.total = item.quantity * item.unit_price;
+    this.renderCart();
+  },
+
+  adjustSelected(delta) {
+    if (this.selectedIndex < 0) {
+      showToast('Select a cart item first with click, or add products', 'info');
+      return;
+    }
+    this.adjustQty(this.selectedIndex, delta);
+  },
+
+  selectAll() {
+    if (this.cart.length === 0) {
+      this.products.forEach(p => this.addToCart(p.id));
+    } else {
+      this.setSelected(-1);
+      this.cart.forEach((_, i) => { this.cart[i].quantity = 1; this.cart[i].total = this.cart[i].unit_price; });
+      this.renderCart();
+    }
+  },
+
+  setSelected(index) {
+    this.selectedIndex = index;
+    if (this._onSelectionChange) this._onSelectionChange(index);
+    const items = document.querySelectorAll('.pos-cart-item');
+    items.forEach((el, i) => {
+      el.classList.toggle('selected', i === index);
+      if (i === index) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  },
+
+  clearCart() {
+    this.cart = [];
+    this.customer = null;
+    this.setSelected(-1);
+    this.renderCart();
+    document.getElementById('posCustomerBadge').style.display = 'none';
+    this._updatePayBtn();
+  },
+
+  clearCustomer() {
+    this.customer = null;
+    document.getElementById('posCustomerBadge').style.display = 'none';
+  },
+
+  renderCart() {
+    const container = document.getElementById('posCartItems');
+    if (this.cart.length === 0) {
+      container.innerHTML = '<div class="empty-state"><svg data-lucide="shopping-bag"></svg><p>Cart is empty</p><p class="empty-sub">Click a product or scan barcode to add</p></div>';
+    } else {
+      container.innerHTML = this.cart.map((item, i) => `
+        <div class="pos-cart-item ${i === this.selectedIndex ? 'selected' : ''}" data-index="${i}">
+          <div class="item-select" onclick="POS.setSelected(${i})"></div>
+          <div class="item-info" onclick="POS.setSelected(${i})">
+            <div class="item-name">${escapeHtml(item.name)}</div>
+            <div class="item-meta">${formatCurrency(item.unit_price)} each</div>
+          </div>
+          <div class="item-qty">
+            <button onclick="event.stopPropagation();POS.adjustQty(${i}, -1)">−</button>
+            <span>${item.quantity}</span>
+            <button onclick="event.stopPropagation();POS.adjustQty(${i}, 1)">+</button>
+          </div>
+          <div class="item-total">
+            <div class="total-price">${formatCurrency(item.total)}</div>
+            <button class="remove-btn" onclick="event.stopPropagation();POS.removeFromCart(${i})">Remove</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    const subtotal = this.cart.reduce((s, i) => s + i.total, 0);
+    const tax = this.cart.reduce((s, i) => s + (i.total * (i.tax_rate || 0) / 100), 0);
+    const total = subtotal + tax;
+
+    document.getElementById('cartSubtotal').textContent = formatCurrency(subtotal);
+    document.getElementById('cartTax').textContent = formatCurrency(tax);
+    document.getElementById('cartDiscount').textContent = formatCurrency(0);
+    document.getElementById('cartTotal').textContent = formatCurrency(total);
+  },
+
+  _updatePayBtn() {
+    const btn = document.getElementById('payBtn');
+    if (this.cart.length === 0) {
+      btn.disabled = true;
+      btn.textContent = 'Select products to begin';
+    } else {
+      btn.disabled = false;
+      btn.textContent = `Pay ${document.getElementById('cartTotal').textContent} (F12)`;
+    }
+  },
+
+  // ---- Customer ----
+
+  selectCustomer() {
+    const modal = new Modal({ title: 'Select Customer', size: 'sm' });
+    const searchId = 'custSearch_' + Date.now();
+    const listId = 'custList_' + Date.now();
+
+    modal.open(`
+      <div class="form-group">
+        <label class="form-label">Search or create customer</label>
+        <input class="form-input" type="text" id="${searchId}" placeholder="Type name or phone..." autofocus>
+      </div>
+      <div id="${listId}" style="max-height:240px;overflow-y:auto"></div>
+    `);
+    this.modalStack.push(() => modal.close());
+
+    const searchInput = document.getElementById(searchId);
+    const listEl = document.getElementById(listId);
+    let debounceTimer;
+
+    async function doSearch(q) {
+      if (!q) { listEl.innerHTML = '<div class="text-sm text-secondary" style="padding:8px">Start typing to search...</div>'; return; }
+      try {
+        const res = await API.get('/customers', { search: q, limit: 20 });
+        const rows = res.rows || [];
+        if (rows.length === 0) {
+          listEl.innerHTML = `<div class="empty-state" style="padding:12px">
+            <svg data-lucide="user-plus" style="width:24px;height:24px"></svg>
+            <p>No results</p>
+            <button class="btn btn-sm btn-primary" onclick="POS.createCustomer('${q}')">Create "${escapeHtml(q)}"</button>
+          </div>`;
+        } else {
+          listEl.innerHTML = rows.map(c => `
+            <div class="pos-customer-item" data-cid="${c.id}" data-name="${escapeHtml(c.name)}">
+              <div>
+                <strong>${escapeHtml(c.name)}</strong>
+                <div class="text-sm text-secondary">${c.phone || ''}</div>
+              </div>
+              <svg data-lucide="chevron-right" style="width:16px;height:16px"></svg>
+            </div>
+          `).join('');
+          listEl.querySelectorAll('.pos-customer-item').forEach(el => {
+            el.addEventListener('click', () => {
+              POS._setCustomer({ id: parseInt(el.dataset.cid), name: el.dataset.name });
+              modal.close();
+            });
+          });
+          try { lucide.createIcons(); } catch(e) {}
+        }
+      } catch (e) { listEl.innerHTML = '<div class="text-sm text-danger">Error loading customers</div>'; }
+    }
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => doSearch(searchInput.value.trim()), 300);
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { modal.close(); }
+      if (e.key === 'Enter' && searchInput.value.trim()) { doSearch(searchInput.value.trim()); }
+    });
+
+    modal.setFooter(`
+      <button class="btn btn-ghost" onclick="document.querySelector('.modal-close').click()">Cancel</button>
+      <button class="btn btn-primary" onclick="POS.createCustomer(document.getElementById('${searchId}').value)">Add New</button>
+    `);
+
+    setTimeout(() => searchInput?.focus(), 100);
+    try { lucide.createIcons(); } catch(e) {}
+  },
+
+  async createCustomer(name) {
+    if (!name || !name.trim()) { showToast('Enter a customer name', 'warning'); return; }
+    try {
+      const c = await API.post('/customers', { name: name.trim() });
+      this._setCustomer(c);
+      const modal = document.querySelector('.modal-close');
+      if (modal) modal.click();
+      showToast(`Customer: ${c.name}`, 'success');
+    } catch (e) {
+      if (this.usingTestData) {
+        this._setCustomer({ id: 0, name: name.trim() });
+        const modal = document.querySelector('.modal-close');
+        if (modal) modal.click();
+        showToast(`Customer: ${name.trim()}`, 'success');
+      } else {
+        showToast(e.message || 'Failed to create customer', 'error');
+      }
+    }
+  },
+
+  _setCustomer(c) {
+    this.customer = c;
+    const badge = document.getElementById('posCustomerBadge');
+    document.getElementById('posCustomerName').textContent = c.name;
+    badge.style.display = 'flex';
+    try { lucide.createIcons(); } catch(e) {}
+  },
+
+  // ---- Payment ----
+
+  openPayment() {
+    if (this.cart.length === 0) return;
+
+    if (this.usingTestData) {
+      showToast('Demo sale completed (test mode)', 'success');
+      this.clearCart();
+      return;
+    }
+
+    const total = this.cart.reduce((s, i) => s + (i.quantity * i.unit_price), 0) +
+                  this.cart.reduce((s, i) => s + (i.total * (i.tax_rate || 0) / 100), 0);
+
+    const modal = new Modal({ title: 'Payment', size: 'sm' });
+    this.modalStack.push(() => modal.close());
+
+    modal.open(`
+      <div class="payment-methods">
+        <button class="payment-method-btn active" data-method="cash">
+          <svg data-lucide="banknote"></svg> Cash
+        </button>
+        <button class="payment-method-btn" data-method="card">
+          <svg data-lucide="credit-card"></svg> Card
+        </button>
+        <button class="payment-method-btn" data-method="upi">
+          <svg data-lucide="smartphone"></svg> UPI
+        </button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount Received</label>
+        <input class="form-input" type="number" id="amountPaid" value="${total}" step="0.01" min="${total}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Change Due</label>
+        <div style="font-size:var(--font-2xl);font-weight:700;color:var(--color-success)" id="changeDisplay">$0.00</div>
+      </div>
+    `);
+
+    modal.setFooter(`
+      <button class="btn btn-ghost" onclick="document.querySelector('.modal-close').click()">Cancel</button>
+      <button class="btn btn-success btn-lg" id="confirmPayment">Pay ${formatCurrency(total)}</button>
+    `);
+
+    let method = 'cash';
+    document.querySelectorAll('.payment-method-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.payment-method-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        method = btn.dataset.method;
+      });
+    });
+
+    const amountInput = document.getElementById('amountPaid');
+    if (amountInput) {
+      amountInput.addEventListener('input', function () {
+        const paid = parseFloat(this.value) || 0;
+        const change = Math.max(0, paid - total);
+        document.getElementById('changeDisplay').textContent = formatCurrency(change);
+      });
+    }
+
+    document.getElementById('confirmPayment').addEventListener('click', async () => {
+      const amountPaid = parseFloat(document.getElementById('amountPaid')?.value) || total;
+      const btn = document.getElementById('confirmPayment');
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+
+      try {
+        const sale = await API.post('/sales', {
+          items: this.cart.map(i => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          })),
+          customer_id: this.customer?.id || null,
+          payment_method: method,
+          amount_paid: amountPaid,
+        });
+        this.modalStack.pop();
+        modal.close();
+        showToast(`Sale completed! Invoice: ${sale.invoice_number}`, 'success');
+        this.clearCart();
+        await this.loadProducts();
+      } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      }
+    });
+
+    setTimeout(() => amountInput?.focus(), 100);
+    try { lucide.createIcons(); } catch(e) {}
+  },
+
+  _debounce(fn, delay) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), delay);
+    };
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => POS.init());
+</script>

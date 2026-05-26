@@ -1,0 +1,37 @@
+<div class="page-header">
+  <h1>Purchases</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="showPurchaseModal()">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      New Purchase
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="purchasesList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const res = await API.get('/purchases', { limit: 30 });
+  const el = document.getElementById('purchasesList');
+  const rows = res.rows || [];
+  if (rows.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="truck"></svg><p>No purchases</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>PO #</th><th>Supplier</th><th>Total</th><th>Date</th></tr></thead><tbody>' +
+    rows.map(p => '<tr><td><span class="font-medium">' + escapeHtml(p.purchase_number) + '</span></td><td>' + escapeHtml(p.supplier_name || '-') + '</td><td class="font-semibold">' + formatCurrency(p.grand_total) + '</td><td class="text-sm text-secondary">' + formatDate(p.created_at) + '</td></tr>').join('') +
+    '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+});
+async function showPurchaseModal() {
+  const supplierId = prompt('Supplier ID (or leave blank):');
+  const items = prompt('Items (format: productId:qty:cost, ...):');
+  if (!items) return;
+  try {
+    const itemArr = items.split(',').map(s => { const p = s.trim().split(':'); return { product_id: parseInt(p[0]), quantity: parseFloat(p[1]), unit_cost: parseFloat(p[2]) }; });
+    await API.post('/purchases', { supplier_id: supplierId ? parseInt(supplierId) : null, items: itemArr });
+    showToast('Purchase created!', 'success');
+    window.location.reload();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

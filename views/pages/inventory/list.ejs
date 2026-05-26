@@ -1,0 +1,277 @@
+<div class="page-header">
+  <h1>Stock / Inventory</h1>
+  <div class="page-actions">
+    <button class="btn btn-outline" onclick="showRestockModal()">
+      <svg data-lucide="plus-circle" style="width:16px;height:16px"></svg>
+      Restock Product
+    </button>
+    <button class="btn btn-outline" onclick="showAdjustModal()">
+      <svg data-lucide="rotate-ccw" style="width:16px;height:16px"></svg>
+      Adjust Stock
+    </button>
+  </div>
+</div>
+
+<div class="toolbar-row" style="display:flex;gap:8px;padding:0 0 var(--space-md) 0;flex-wrap:wrap">
+  <button class="btn btn-sm filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
+  <button class="btn btn-sm filter-btn" data-filter="low" onclick="setFilter('low',this)">Low Stock</button>
+  <button class="btn btn-sm filter-btn" data-filter="out" onclick="setFilter('out',this)">Out of Stock</button>
+</div>
+
+<div class="table-wrap">
+  <div class="card-body" id="inventoryList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+
+<style>
+.filter-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.restock-inline { display:flex; gap:4px; align-items:center; }
+.restock-inline input { width:70px; padding:4px 6px; border:1px solid var(--color-border); border-radius:var(--radius-sm); font-size:var(--font-xs); }
+.restock-inline .btn { padding:4px 8px; font-size:var(--font-xs); }
+</style>
+
+<script>
+let currentFilter = 'all';
+let currentSearch = '';
+let currentPage = 1;
+
+async function loadData(page, filter, search) {
+  currentPage = page || currentPage;
+  currentFilter = filter || currentFilter;
+  currentSearch = search !== undefined ? search : currentSearch;
+  const params = { page: currentPage, limit: 20 };
+  if (currentFilter === 'low') params.low_stock = 'true';
+  if (currentFilter === 'out') params.out_of_stock = 'true';
+  if (currentSearch) params.search = currentSearch;
+
+  const res = await API.get('/inventory', params);
+  const el = document.getElementById('inventoryList');
+  const table = new DataTable('inventoryList', {
+    columns: [
+      { label: 'Product', field: 'name', render: r => `<a href="/app/products/${r.id}" class="link font-medium">${escapeHtml(r.name)}</a>` },
+      { label: 'SKU', field: 'sku' },
+      { label: 'Quantity', field: 'quantity', render: r => {
+        const color = r.quantity <= 0 ? 'var(--color-danger)' : r.quantity <= r.min_stock_level ? 'var(--color-warning)' : 'var(--color-success)';
+        return `<span style="font-weight:700;font-size:var(--font-base);color:${color}">${r.quantity}</span>`;
+      }},
+      { label: 'Min Stock', field: 'min_stock_level' },
+      { label: 'Value', field: 'stock_value', render: r => formatCurrency(r.stock_value) },
+      { label: 'Status', field: 'status', sortable: false, render: r => {
+        if (r.quantity <= 0) return '<span class="badge badge-danger">Out of Stock</span>';
+        if (r.quantity <= r.min_stock_level) return '<span class="badge badge-warning">Low</span>';
+        return '<span class="badge badge-success">OK</span>';
+      }},
+    ],
+    actions: r => `
+      <div class="restock-inline">
+        <input type="number" min="1" value="10" id="restockQty_${r.id}" placeholder="Qty">
+        <button class="btn btn-sm btn-primary" onclick="quickRestock(${r.id})" title="Restock">
+          <svg data-lucide="plus-circle" style="width:14px;height:14px"></svg>
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="showProductMovements(${r.id}, '${escapeHtml(r.name)}')" title="History">
+          <svg data-lucide="clock" style="width:14px;height:14px"></svg>
+        </button>
+      </div>
+    `,
+    onSearch: (q) => loadData(1, currentFilter, q),
+    onPageChange: (p) => loadData(p, currentFilter, currentSearch),
+  });
+  table.render(res.rows, res.total);
+  try { lucide.createIcons(); } catch(e) {}
+}
+
+function setFilter(f, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadData(1, f);
+}
+
+async function quickRestock(productId) {
+  const qtyInput = document.getElementById('restockQty_' + productId);
+  const qty = parseInt(qtyInput?.value) || 10;
+  if (!qty || qty <= 0) { showToast('Enter a valid quantity', 'warning'); return; }
+  if (!confirm(`Restock product with ${qty} units?`)) return;
+  try {
+    const res = await API.post('/inventory/restock/' + productId, { quantity: qty, notes: 'Quick restock from inventory' });
+    showToast(`Restocked: ${res.product.name} (${res.previous_qty} → ${res.new_qty})`, 'success');
+    loadData(currentPage);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function showRestockModal() {
+  const modal = new Modal({ title: 'Restock Product', size: 'sm' });
+  const searchId = 'restockSearch_' + Date.now();
+  const qtyId = 'restockQty_' + Date.now();
+  const noteId = 'restockNote_' + Date.now();
+  const listId = 'restockList_' + Date.now();
+
+  modal.open(`
+    <div class="form-group">
+      <label class="form-label">Search Product</label>
+      <input class="form-input" type="text" id="${searchId}" placeholder="Type product name..." autofocus>
+    </div>
+    <div id="${listId}" style="max-height:200px;overflow-y:auto;margin-bottom:12px"></div>
+    <div class="form-group">
+      <label class="form-label">Quantity to Add</label>
+      <input class="form-input" type="number" id="${qtyId}" value="10" min="1" step="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Reason (optional)</label>
+      <input class="form-input" type="text" id="${noteId}" placeholder="e.g. Supplier restock">
+    </div>
+  `);
+
+  modal.setFooter(`
+    <button class="btn btn-ghost" onclick="document.querySelector('.modal-close')?.click()">Cancel</button>
+    <button class="btn btn-primary" id="doRestockBtn" disabled>Restock</button>
+  `);
+
+  let selectedProductId = null;
+  const searchInput = document.getElementById(searchId);
+  const listEl = document.getElementById(listId);
+
+  async function doSearch(q) {
+    if (!q || q.length < 2) { listEl.innerHTML = ''; return; }
+    try {
+      const res = await API.get('/products', { search: q, limit: 20 });
+      const rows = res.rows || [];
+      if (rows.length === 0) { listEl.innerHTML = '<div class="text-sm text-secondary" style="padding:8px">No products found</div>'; return; }
+      listEl.innerHTML = rows.map(p => `
+        <div class="pos-customer-item" data-pid="${p.id}" data-name="${escapeHtml(p.name)}" style="${p.id === selectedProductId ? 'background:var(--color-primary-subtle)' : ''}">
+          <div><strong>${escapeHtml(p.name)}</strong><div class="text-sm text-secondary">SKU: ${p.sku} | Stock: ${p.stock_quantity || 0}</div></div>
+        </div>
+      `).join('');
+      listEl.querySelectorAll('.pos-customer-item').forEach(el => {
+        el.addEventListener('click', () => {
+          selectedProductId = parseInt(el.dataset.pid);
+          document.getElementById('doRestockBtn').disabled = false;
+          listEl.querySelectorAll('.pos-customer-item').forEach(i => i.style.background = '');
+          el.style.background = 'var(--color-primary-subtle)';
+          document.getElementById(qtyId).focus();
+        });
+      });
+    } catch (e) { listEl.innerHTML = '<div class="text-sm text-danger">Error loading products</div>'; }
+  }
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(window._restockSearchTimer);
+    window._restockSearchTimer = setTimeout(() => doSearch(searchInput.value.trim()), 300);
+  });
+
+  document.getElementById('doRestockBtn').addEventListener('click', async () => {
+    if (!selectedProductId) return;
+    const qty = parseInt(document.getElementById(qtyId).value) || 10;
+    const notes = document.getElementById(noteId).value.trim() || 'Manual restock';
+    try {
+      const res = await API.post('/inventory/restock/' + selectedProductId, { quantity: qty, notes });
+      showToast(`Restocked ${res.product.name}: ${res.previous_qty} → ${res.new_qty}`, 'success');
+      document.querySelector('.modal-close')?.click();
+      loadData(currentPage);
+    } catch (e) { showToast(e.message, 'error'); }
+  });
+
+  setTimeout(() => searchInput?.focus(), 100);
+}
+
+async function showAdjustModal() {
+  const modal = new Modal({ title: 'Adjust Stock', size: 'sm' });
+  const searchId = 'adjSearch_' + Date.now();
+  const qtyId = 'adjQty_' + Date.now();
+  const noteId = 'adjNote_' + Date.now();
+  const listId = 'adjList_' + Date.now();
+
+  modal.open(`
+    <div class="form-group">
+      <label class="form-label">Search Product</label>
+      <input class="form-input" type="text" id="${searchId}" placeholder="Type product name..." autofocus>
+    </div>
+    <div id="${listId}" style="max-height:200px;overflow-y:auto;margin-bottom:12px"></div>
+    <div class="form-group">
+      <label class="form-label">Adjustment Quantity</label>
+      <input class="form-input" type="number" id="${qtyId}" value="0" step="1" placeholder="+/- quantity">
+      <div class="text-sm text-secondary" style="margin-top:4px">Use positive to add, negative to remove</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Reason</label>
+      <input class="form-input" type="text" id="${noteId}" placeholder="e.g. Inventory correction">
+    </div>
+  `);
+
+  modal.setFooter(`
+    <button class="btn btn-ghost" onclick="document.querySelector('.modal-close')?.click()">Cancel</button>
+    <button class="btn btn-warning" id="doAdjBtn" disabled>Adjust</button>
+  `);
+
+  let selectedProductId = null;
+  const searchInput = document.getElementById(searchId);
+
+  async function doSearch(q) {
+    const listEl = document.getElementById(listId);
+    if (!q || q.length < 2) { listEl.innerHTML = ''; return; }
+    try {
+      const res = await API.get('/products', { search: q, limit: 20 });
+      const rows = res.rows || [];
+      if (rows.length === 0) { listEl.innerHTML = '<div class="text-sm text-secondary" style="padding:8px">No products found</div>'; return; }
+      listEl.innerHTML = rows.map(p => `
+        <div class="pos-customer-item adj-item" data-pid="${p.id}">
+          <div><strong>${escapeHtml(p.name)}</strong><div class="text-sm text-secondary">SKU: ${p.sku} | Stock: ${p.stock_quantity || 0}</div></div>
+        </div>
+      `).join('');
+      listEl.querySelectorAll('.adj-item').forEach(el => {
+        el.addEventListener('click', () => {
+          selectedProductId = parseInt(el.dataset.pid);
+          document.getElementById('doAdjBtn').disabled = false;
+          listEl.querySelectorAll('.adj-item').forEach(i => i.style.background = '');
+          el.style.background = 'var(--color-primary-subtle)';
+          document.getElementById(qtyId).focus();
+        });
+      });
+    } catch (e) { listEl.innerHTML = '<div class="text-sm text-danger">Error</div>'; }
+  }
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(window._adjSearchTimer);
+    window._adjSearchTimer = setTimeout(() => doSearch(searchInput.value.trim()), 300);
+  });
+
+  document.getElementById('doAdjBtn').addEventListener('click', async () => {
+    if (!selectedProductId) return;
+    const rawQty = parseFloat(document.getElementById(qtyId).value) || 0;
+    if (rawQty === 0) { showToast('Enter a non-zero quantity', 'warning'); return; }
+    const absQty = Math.abs(rawQty);
+    const type = rawQty > 0 ? 'return' : 'adjustment';
+    const notes = document.getElementById(noteId).value.trim() || 'Manual adjustment';
+    if (!confirm(`Adjust stock by ${rawQty > 0 ? '+' : ''}${rawQty} units?`)) return;
+    try {
+      const res = await API.post('/inventory/adjust/' + selectedProductId, { quantity: absQty, type, notes });
+      showToast(`Adjusted: ${res.product.name} (now ${res.new_qty})`, 'success');
+      document.querySelector('.modal-close')?.click();
+      loadData(currentPage);
+    } catch (e) { showToast(e.message, 'error'); }
+  });
+
+  setTimeout(() => searchInput?.focus(), 100);
+}
+
+async function showProductMovements(productId, productName) {
+  const modal = new Modal({ title: `Stock History: ${escapeHtml(productName)}`, size: 'md' });
+  modal.open('<div id="movementsContent"><div class="loading-spinner"></div></div>');
+  try {
+    const res = await API.get('/inventory/' + productId + '/movements', { limit: 50 });
+    const rows = res.rows || [];
+    const el = document.getElementById('movementsContent');
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty-state"><svg data-lucide="clock"></svg><p>No movement history</p></div>';
+    } else {
+      el.innerHTML = '<table class="data-table"><thead><tr><th>Date</th><th>Type</th><th>Qty</th><th>Notes</th><th>By</th></tr></thead><tbody>' +
+        rows.map(m => `<tr><td class="text-sm">${formatDate(m.created_at)}</td><td><span class="badge badge-${m.type === 'purchase' || m.type === 'restock' || m.type === 'return' ? 'success' : m.type === 'sale' ? 'info' : 'warning'}">${m.type}</span></td><td class="font-semibold">${m.quantity}</td><td class="text-sm text-secondary">${escapeHtml(m.notes || '')}</td><td class="text-sm">${escapeHtml(m.created_by_name || '')}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+  } catch (e) { document.getElementById('movementsContent').innerHTML = '<div class="text-sm text-danger">Error loading history</div>'; }
+  try { lucide.createIcons(); } catch(e) {}
+  modal.setFooter('<button class="btn btn-ghost" onclick="document.querySelector(\'.modal-close\')?.click()">Close</button>');
+}
+
+document.addEventListener('DOMContentLoaded', () => loadData());
+</script>

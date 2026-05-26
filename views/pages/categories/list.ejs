@@ -1,0 +1,40 @@
+<div class="page-header">
+  <h1>Categories</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="showCategoryModal()">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      Add Category
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="categoriesList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => { await loadCategories(); });
+async function loadCategories() {
+  const cats = await API.get('/categories');
+  const el = document.getElementById('categoriesList');
+  if (cats.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="tags"></svg><p>No categories</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Name</th><th>Products</th><th class="text-right">Actions</th></tr></thead><tbody>' +
+    cats.map(c => '<tr><td><span class="font-medium">' + escapeHtml(c.name) + '</span></td><td><span class="badge badge-ghost">' + (c.product_count || 0) + '</span></td><td class="cell-actions" style="justify-content:flex-end"><button class="btn btn-sm btn-ghost" onclick="editCategory(' + c.id + ',\'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')"><svg data-lucide="pencil" style="width:14px;height:14px"></svg></button><button class="btn btn-sm btn-ghost" style="color:var(--color-danger)" onclick="deleteCategory(' + c.id + ')"><svg data-lucide="trash-2" style="width:14px;height:14px"></svg></button></td></tr>').join('') +
+    '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+}
+async function showCategoryModal() {
+  const name = prompt('Category name:');
+  if (!name) return;
+  try { await API.post('/categories', { name }); showToast('Category created', 'success'); await loadCategories(); } catch(e) { showToast(e.message, 'error'); }
+}
+async function editCategory(id, name) {
+  const newName = prompt('Edit category name:', name);
+  if (!newName || newName === name) return;
+  try { await API.put('/categories/' + id, { name: newName }); showToast('Updated', 'success'); await loadCategories(); } catch(e) { showToast(e.message, 'error'); }
+}
+async function deleteCategory(id) {
+  if (!confirm('Delete?')) return;
+  try { await API.delete('/categories/' + id); showToast('Deleted', 'success'); await loadCategories(); } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

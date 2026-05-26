@@ -1,0 +1,39 @@
+<div class="page-header">
+  <h1>Backup & Restore</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="createBackup()">
+      <svg data-lucide="database" style="width:16px;height:16px"></svg>
+      Create Backup
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="backupList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', loadBackups);
+async function loadBackups() {
+  try {
+    const data = await API.get('/backup/list');
+    const el = document.getElementById('backupList');
+    if (data.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="database"></svg><p>No backups yet</p><p class="empty-sub">Create your first backup to secure your data</p></div>'; return; }
+    el.innerHTML = '<table class="data-table"><thead><tr><th>Filename</th><th>Size</th><th>Type</th><th>Created By</th><th>Date</th><th class="text-right">Actions</th></tr></thead><tbody>' +
+      data.map(b => '<tr><td><span class="font-medium">' + escapeHtml(b.filename) + '</span></td><td class="text-sm text-secondary">' + (b.size_bytes ? (b.size_bytes / 1024).toFixed(1) + ' KB' : '-') + '</td><td><span class="badge badge-info">' + (b.type || '-') + '</span></td><td>' + escapeHtml(b.created_by_name || '-') + '</td><td class="text-sm text-secondary">' + formatDate(b.created_at) + '</td><td class="cell-actions" style="justify-content:flex-end"><button class="btn btn-sm btn-ghost" style="color:var(--color-warning)" onclick="restoreBackup(' + b.id + ')" title="Restore"><svg data-lucide="rotate-ccw" style="width:14px;height:14px"></svg></button><button class="btn btn-sm btn-ghost" style="color:var(--color-danger)" onclick="deleteBackup(' + b.id + ')" title="Delete"><svg data-lucide="trash-2" style="width:14px;height:14px"></svg></button></td></tr>').join('') +
+      '</tbody></table>';
+    try { lucide.createIcons(); } catch(e) {}
+  } catch(e) { showToast('Failed to load backups', 'error'); }
+}
+async function createBackup() {
+  try { await API.post('/backup/create'); showToast('Backup created!', 'success'); loadBackups(); } catch(e) { showToast(e.message, 'error'); }
+}
+async function restoreBackup(id) {
+  if (!confirm('Restore will replace current data. Continue?')) return;
+  try { await API.post('/backup/restore/' + id); showToast('Database restored! Please restart the application.', 'success'); } catch(e) { showToast(e.message, 'error'); }
+}
+async function deleteBackup(id) {
+  if (!confirm('Delete this backup?')) return;
+  try { await API.delete('/backup/' + id); showToast('Deleted', 'success'); loadBackups(); } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

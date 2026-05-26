@@ -1,0 +1,306 @@
+<div class="page-header">
+  <h1>Admin Dashboard</h1>
+  <div class="page-actions">
+    <button class="btn btn-outline btn-sm" onclick="window.location.href='/app/reports'">
+      <svg data-lucide="bar-chart-3" style="width:16px;height:16px"></svg>
+      Full Reports
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="window.location.href='/app/settings'">
+      <svg data-lucide="settings" style="width:16px;height:16px"></svg>
+      Settings
+    </button>
+  </div>
+</div>
+
+<div class="stats-grid" id="statsGrid">
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--color-primary-subtle)">
+      <svg data-lucide="dollar-sign" style="color:var(--color-primary)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Today's Revenue</div>
+      <div class="stat-value" id="statRevenue">$0.00</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--color-success-subtle)">
+      <svg data-lucide="shopping-bag" style="color:var(--color-success)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Today's Orders</div>
+      <div class="stat-value" id="statOrders">0</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--color-info-subtle)">
+      <svg data-lucide="users" style="color:var(--color-info)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Active Users</div>
+      <div class="stat-value" id="statUsers">0</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--color-warning-subtle)">
+      <svg data-lucide="alert-triangle" style="color:var(--color-warning)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Low Stock Items</div>
+      <div class="stat-value" id="statLowStock">0</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--color-danger-subtle)">
+      <svg data-lucide="package" style="color:var(--color-danger)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Total Products</div>
+      <div class="stat-value" id="statProducts">0</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:var(--color-secondary-subtle)">
+      <svg data-lucide="activity" style="color:var(--color-secondary)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Today Collected</div>
+      <div class="stat-value" id="statCollected">$0.00</div>
+    </div>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <div class="chart-card">
+    <h3>Revenue (7 Days)</h3>
+    <div class="chart-wrapper">
+      <canvas id="salesChart"></canvas>
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3>Order Volume</h3>
+    <div class="chart-wrapper" style="height:200px">
+      <canvas id="orderChart"></canvas>
+    </div>
+  </div>
+  <div class="activity-list">
+    <div class="card-header">
+      <h3>Recent Activity</h3>
+    </div>
+    <div id="recentActivityList">
+      <div class="empty-state">
+        <svg data-lucide="clock"></svg>
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+  <div class="activity-list">
+    <div class="card-header">
+      <h3>Recent Transactions</h3>
+    </div>
+    <div id="recentSalesList">
+      <div class="empty-state">
+        <svg data-lucide="receipt"></svg>
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')})();
+let __chartData = null;
+let __dashboardCharts = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const summary = await API.get('/dashboard/summary');
+    document.getElementById('statRevenue').textContent = formatCurrency(summary.today_revenue);
+    document.getElementById('statOrders').textContent = summary.today_orders;
+    document.getElementById('statProducts').textContent = summary.total_products;
+    document.getElementById('statLowStock').textContent = summary.low_stock_count;
+    document.getElementById('statUsers').textContent = summary.active_users;
+    document.getElementById('statCollected').textContent = formatCurrency(summary.today_collected || 0);
+  } catch (e) { showToast('Failed to load dashboard', 'error'); }
+
+  try {
+    const sales = await API.get('/dashboard/recent-sales', { limit: 5 });
+    const list = document.getElementById('recentSalesList');
+    if (sales.length === 0) {
+      list.innerHTML = '<div class="empty-state"><svg data-lucide="receipt"></svg><p>No recent transactions</p></div>';
+    } else {
+      list.innerHTML = sales.map(s => `
+        <div class="activity-item">
+          <div class="activity-dot success"></div>
+          <div style="flex:1"><strong>${escapeHtml(s.invoice_number)}</strong><br><span class="text-sm text-secondary">${escapeHtml(s.customer_name || 'Walk-in')} by ${escapeHtml(s.user_name)}</span></div>
+          <div class="text-right"><strong>${formatCurrency(s.grand_total)}</strong><br><span class="text-sm text-secondary">${formatDate(s.created_at)}</span></div>
+        </div>
+      `).join('');
+    }
+  } catch (e) { /* ignore */ }
+
+  try {
+    const activities = await API.get('/activity', { limit: 5 });
+    const list = document.getElementById('recentActivityList');
+    if (activities.length === 0) {
+      list.innerHTML = '<div class="empty-state"><svg data-lucide="activity"></svg><p>No recent activity</p></div>';
+    } else {
+      list.innerHTML = activities.map(a => `
+        <div class="activity-item">
+          <div class="activity-dot info"></div>
+          <div style="flex:1"><strong>${escapeHtml(a.action)}</strong><br><span class="text-sm text-secondary">${a.details || ''}</span></div>
+          <div class="text-sm text-secondary">${formatDate(a.created_at)}</div>
+        </div>
+      `).join('');
+    }
+  } catch (e) { /* ignore */ }
+
+  try {
+    __chartData = await API.get('/dashboard/charts', { days: 7 });
+  } catch (e) { /* ignore */ }
+
+  if (!__chartData || __chartData.length === 0) {
+    ['salesChart', 'orderChart'].forEach(id => {
+      const canvas = document.getElementById(id);
+      if (canvas) {
+        const msg = id === 'salesChart' ? 'No revenue data yet' : 'No order data yet';
+        canvas.parentElement.innerHTML = `<div class="empty-state"><svg data-lucide="${id === 'salesChart' ? 'trending-up' : 'bar-chart-3'}"></svg><p>${msg}</p></div>`;
+      }
+    });
+    try { lucide.createIcons(); } catch(e) {}
+  } else {
+    renderDashboardCharts();
+  }
+  try { lucide.createIcons(); } catch(e) {}
+});
+
+function themeColor(name, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function isDarkTheme() {
+  return (localStorage.getItem('theme') || 'light') === 'dark';
+}
+
+function renderDashboardCharts() {
+  __dashboardCharts.forEach(c => c.destroy());
+  __dashboardCharts = [];
+
+  const salesCanvas = document.getElementById('salesChart');
+  if (salesCanvas && typeof Chart !== 'undefined') {
+    const isDark = isDarkTheme();
+    const primary = themeColor('--color-primary', isDark ? '#6b8aff' : '#4f6ef7');
+    const textMuted = themeColor('--color-text-tertiary', '#8a9bb5');
+    const gridColor = themeColor('--color-border-light', isDark ? '#1e2a45' : '#f0f4fa');
+    const tooltipBg = themeColor('--color-bg-elevated', '#fff');
+    const tooltipTxt = themeColor('--color-text', '#0b1a30');
+    __dashboardCharts.push(new Chart(salesCanvas, {
+      type: 'line',
+      data: {
+        labels: __chartData.map(d => formatDateShort(d.date)),
+        datasets: [{
+          label: 'Revenue',
+          data: __chartData.map(d => d.revenue),
+          borderColor: primary,
+          backgroundColor: primary + '1a',
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#fff',
+          pointBorderColor: primary,
+          pointBorderWidth: 2.5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: tooltipBg,
+            titleColor: tooltipTxt,
+            bodyColor: textMuted,
+            borderColor: gridColor,
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: { top: 10, bottom: 10, left: 12, right: 12 },
+            callbacks: { label: ctx => '  Revenue: ' + formatCurrency(ctx.parsed.y) }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: gridColor, drawBorder: false },
+            ticks: { color: textMuted, font: { size: 11 }, callback: v => formatCurrency(v).replace('.00','') }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: textMuted, font: { size: 11 } }
+          }
+        }
+      }
+    }));
+  }
+
+  const orderCanvas = document.getElementById('orderChart');
+  if (orderCanvas && typeof Chart !== 'undefined') {
+    const isDark = isDarkTheme();
+    const success = themeColor('--color-success', isDark ? '#34d399' : '#10b981');
+    const textMuted = themeColor('--color-text-tertiary', '#8a9bb5');
+    const gridColor = themeColor('--color-border-light', isDark ? '#1e2a45' : '#f0f4fa');
+    const tooltipBg = themeColor('--color-bg-elevated', '#fff');
+    const tooltipTxt = themeColor('--color-text', '#0b1a30');
+    __dashboardCharts.push(new Chart(orderCanvas, {
+      type: 'bar',
+      data: {
+        labels: __chartData.map(d => formatDateShort(d.date)),
+        datasets: [{
+          label: 'Orders',
+          data: __chartData.map(d => d.orders),
+          backgroundColor: success + '99',
+          borderColor: success,
+          borderWidth: 0,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: tooltipBg,
+            titleColor: tooltipTxt,
+            bodyColor: textMuted,
+            borderColor: gridColor,
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: { top: 10, bottom: 10, left: 12, right: 12 },
+            callbacks: { label: ctx => '  Orders: ' + ctx.parsed.y }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0, color: textMuted, font: { size: 11 } },
+            grid: { color: gridColor, drawBorder: false }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: textMuted, font: { size: 11 } }
+          }
+        }
+      }
+    }));
+  }
+  try { lucide.createIcons(); } catch(e) {}
+}
+
+document.addEventListener('themechange', () => {
+  if (__chartData && __chartData.length > 0) {
+    renderDashboardCharts();
+  }
+});
+</script>

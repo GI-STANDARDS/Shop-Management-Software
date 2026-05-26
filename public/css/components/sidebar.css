@@ -1,0 +1,109 @@
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--color-bg-sidebar);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition);
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  padding: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-brand h2 {
+  color: #fff;
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.sidebar-brand .brand-icon {
+  font-size: 1.5rem;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: var(--space-sm) 0;
+}
+
+.sidebar-section {
+  padding: var(--space-sm) var(--space-lg) var(--space-xs);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-text-sidebar);
+  opacity: 0.6;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px var(--space-lg);
+  color: var(--color-text-sidebar);
+  text-decoration: none;
+  transition: all var(--transition);
+  font-size: var(--font-size-sm);
+  border-left: 3px solid transparent;
+}
+
+.sidebar-link:hover {
+  background: var(--color-bg-sidebar-hover);
+  color: var(--color-text-sidebar-active);
+  text-decoration: none;
+}
+
+.sidebar-link.active {
+  background: var(--color-bg-sidebar-hover);
+  color: var(--color-text-sidebar-active);
+  border-left-color: var(--color-primary);
+}
+
+.sidebar-link .link-icon {
+  width: 20px;
+  text-align: center;
+  font-size: var(--font-size-base);
+}
+
+.sidebar-link .link-badge {
+  margin-left: auto;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.sidebar-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-sidebar);
+  font-size: var(--font-size-sm);
+}
+
+.sidebar-user .user-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}

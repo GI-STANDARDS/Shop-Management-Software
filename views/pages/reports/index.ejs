@@ -1,0 +1,102 @@
+<div class="page-header">
+  <h1>Reports</h1>
+</div>
+<div class="stats-grid">
+  <div class="stat-card" style="cursor:pointer" onclick="showDailySales()">
+    <div class="stat-icon" style="background:var(--color-primary-subtle)">
+      <svg data-lucide="calendar" style="color:var(--color-primary)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Daily Sales</div>
+      <div class="stat-value" style="font-size:var(--font-base)">View Report →</div>
+    </div>
+  </div>
+  <div class="stat-card" style="cursor:pointer" onclick="showProfitLoss()">
+    <div class="stat-icon" style="background:var(--color-success-subtle)">
+      <svg data-lucide="trending-up" style="color:var(--color-success)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Profit & Loss</div>
+      <div class="stat-value" style="font-size:var(--font-base)">View Report →</div>
+    </div>
+  </div>
+  <div class="stat-card" style="cursor:pointer" onclick="showTopProducts()">
+    <div class="stat-icon" style="background:var(--color-warning-subtle)">
+      <svg data-lucide="award" style="color:var(--color-warning)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Top Products</div>
+      <div class="stat-value" style="font-size:var(--font-base)">View Report →</div>
+    </div>
+  </div>
+  <div class="stat-card" style="cursor:pointer" onclick="showExpenseSummary()">
+    <div class="stat-icon" style="background:var(--color-danger-subtle)">
+      <svg data-lucide="wallet" style="color:var(--color-danger)"></svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-label">Expenses</div>
+      <div class="stat-value" style="font-size:var(--font-base)">View Report →</div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-body" id="reportResult">
+    <div class="empty-state">
+      <svg data-lucide="bar-chart-3"></svg>
+      <p>Click a report to view</p>
+    </div>
+  </div>
+</div>
+<script>
+async function showDailySales() {
+  const from = prompt('From (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  const to = prompt('To (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  try {
+    const data = await API.get('/reports/daily-sales', { from, to });
+    const el = document.getElementById('reportResult');
+    if (data.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="bar-chart-3"></svg><p>No data</p></div>'; return; }
+    el.innerHTML = '<h3 style="margin-bottom:16px;font-size:var(--font-base);font-weight:600">Daily Sales Report</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Orders</th><th>Sales</th><th>Tax</th><th>Discount</th><th>Cost</th><th class="text-right">Gross Profit</th></tr></thead><tbody>' +
+      data.map(d => '<tr><td>' + d.date + '</td><td>' + d.order_count + '</td><td class="font-medium">' + formatCurrency(d.total_sales) + '</td><td>' + formatCurrency(d.total_tax) + '</td><td>' + formatCurrency(d.total_discount) + '</td><td>' + formatCurrency(d.total_cost) + '</td><td class="text-right font-semibold">' + formatCurrency(d.gross_profit) + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  } catch(e) { showToast(e.message, 'error'); }
+}
+async function showProfitLoss() {
+  const from = prompt('From (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  const to = prompt('To (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  try {
+    const d = await API.get('/reports/profit-loss', { from, to });
+    document.getElementById('reportResult').innerHTML = '<h3 style="margin-bottom:16px;font-size:var(--font-base);font-weight:600">Profit & Loss</h3><div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">' +
+      '<div class="stat-card"><div class="stat-info"><div class="stat-label">Revenue</div><div class="stat-value" style="font-size:var(--font-xl)">' + formatCurrency(d.total_revenue) + '</div></div></div>' +
+      '<div class="stat-card"><div class="stat-info"><div class="stat-label">Cost of Goods</div><div class="stat-value" style="font-size:var(--font-xl)">' + formatCurrency(d.total_cost) + '</div></div></div>' +
+      '<div class="stat-card"><div class="stat-info"><div class="stat-label">Gross Profit</div><div class="stat-value" style="font-size:var(--font-xl);color:var(--color-success)">' + formatCurrency(d.gross_profit) + '</div></div></div>' +
+      '<div class="stat-card"><div class="stat-info"><div class="stat-label">Expenses</div><div class="stat-value" style="font-size:var(--font-xl)">' + formatCurrency(d.total_expenses) + '</div></div></div>' +
+      '<div class="stat-card"><div class="stat-info"><div class="stat-label">Purchases</div><div class="stat-value" style="font-size:var(--font-xl)">' + formatCurrency(d.total_purchases) + '</div></div></div>' +
+      '<div class="stat-card"><div class="stat-info"><div class="stat-label" style="font-weight:700">Net Profit</div><div class="stat-value" style="font-size:var(--font-xl);color:' + (d.net_profit >= 0 ? 'var(--color-success)' : 'var(--color-danger)') + '">' + formatCurrency(d.net_profit) + '</div></div></div>' +
+      '</div>';
+  } catch(e) { showToast(e.message, 'error'); }
+}
+async function showTopProducts() {
+  const from = prompt('From (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  const to = prompt('To (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  try {
+    const data = await API.get('/reports/top-products', { from, to, limit: 10 });
+    const el = document.getElementById('reportResult');
+    if (data.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="award"></svg><p>No data</p></div>'; return; }
+    el.innerHTML = '<h3 style="margin-bottom:16px;font-size:var(--font-base);font-weight:600">Top Products</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Product</th><th class="text-right">Quantity</th><th class="text-right">Revenue</th><th class="text-right">Profit</th></tr></thead><tbody>' +
+      data.map((p,i) => '<tr><td>' + (i+1) + '</td><td><span class="font-medium">' + escapeHtml(p.name) + '</span></td><td class="text-right">' + p.total_quantity + '</td><td class="text-right font-medium">' + formatCurrency(p.total_revenue) + '</td><td class="text-right font-semibold">' + formatCurrency(p.total_profit) + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  } catch(e) { showToast(e.message, 'error'); }
+}
+async function showExpenseSummary() {
+  const from = prompt('From (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  const to = prompt('To (YYYY-MM-DD):') || new Date().toISOString().slice(0,10);
+  try {
+    const data = await API.get('/reports/expense-summary', { from, to });
+    const el = document.getElementById('reportResult');
+    if (data.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="wallet"></svg><p>No data</p></div>'; return; }
+    el.innerHTML = '<h3 style="margin-bottom:16px;font-size:var(--font-base);font-weight:600">Expense Summary</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Category</th><th class="text-right">Count</th><th class="text-right">Total</th></tr></thead><tbody>' +
+      data.map(e => '<tr><td><span class="badge badge-info">' + escapeHtml(e.category) + '</span></td><td class="text-right">' + e.count + '</td><td class="text-right font-semibold">' + formatCurrency(e.total) + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  } catch(e) { showToast(e.message, 'error'); }
+}
+</script>

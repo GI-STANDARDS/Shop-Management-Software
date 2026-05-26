@@ -1,0 +1,15 @@
+<div class="modal-overlay" id="confirmModal" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Confirm</h3>
+      <button class="modal-close" onclick="closeConfirm()" aria-label="Close">
+        <svg data-lucide="x" style="width:18px;height:18px"></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="confirmMessage">Are you sure?</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="confirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>

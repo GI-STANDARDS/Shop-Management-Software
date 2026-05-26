@@ -1,0 +1,72 @@
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+<div class="card" style="max-width:640px">
+  <div class="card-body">
+    <form id="settingsForm">
+      <div class="settings-section">
+        <h2>Store Information</h2>
+        <div class="form-group">
+          <label class="form-label">Store Name</label>
+          <input class="form-input" name="store_name" id="s_store_name" placeholder="Your store name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Store Address</label>
+          <input class="form-input" name="store_address" id="s_store_address" placeholder="123 Main St">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Store Phone</label>
+            <input class="form-input" name="store_phone" id="s_store_phone" placeholder="+1 234 567 890">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Store Email</label>
+            <input class="form-input" name="store_email" id="s_store_email" placeholder="store@example.com" type="email">
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h2>Localization</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Currency Symbol</label>
+            <input class="form-input" name="currency_symbol" id="s_currency_symbol" placeholder="$">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Default Tax Rate (%)</label>
+            <input class="form-input" type="number" step="0.1" name="default_tax_rate" id="s_default_tax_rate" placeholder="0">
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h2>Receipt</h2>
+        <div class="form-group">
+          <label class="form-label">Receipt Footer</label>
+          <textarea class="form-textarea" name="receipt_footer" id="s_receipt_footer" rows="2" placeholder="Thank you!"></textarea>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <svg data-lucide="save" style="width:16px;height:16px"></svg>
+        Save Settings
+      </button>
+    </form>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const settings = await API.get('/settings');
+    Object.entries(settings).forEach(([k, v]) => {
+      const el = document.getElementById('s_' + k);
+      if (el) el.value = v;
+    });
+    Store.set('settings', settings);
+  } catch(e) { showToast('Failed to load settings', 'error'); }
+
+  document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    try { await API.put('/settings', data); showToast('Settings saved!', 'success'); } catch(e) { showToast(e.message, 'error'); }
+  });
+});
+</script>

@@ -1,0 +1,281 @@
+<div class="page-header">
+  <h1 id="formTitle">Add Product</h1>
+</div>
+<div class="card" style="max-width:680px">
+  <div class="card-body" id="editStockCard" style="display:none;border-bottom:1px solid var(--color-border);margin-bottom:var(--space-lg);padding-bottom:var(--space-lg)">
+    <h3 style="font-size:var(--font-base);margin-bottom:var(--space-sm)">Quick Stock Adjustment</h3>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:var(--font-lg)" id="editCurrentStock">0</span>
+      <span class="text-sm text-secondary" id="editStockUnit">pcs</span>
+      <span class="badge badge-ghost text-sm" id="editStockStatus">In Stock</span>
+      <div style="display:flex;gap:4px;margin-left:auto">
+        <button type="button" class="btn btn-sm btn-primary" onclick="showEditRestock()" title="Add stock">
+          <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="showEditCut()" title="Remove stock">
+          <svg data-lucide="minus" style="width:16px;height:16px"></svg>
+        </button>
+      </div>
+    </div>
+    <div id="editStockActions" style="display:none;margin-top:var(--space-sm)">
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" class="form-input" id="editStockQty" value="10" min="1" step="1" style="width:100px">
+        <input type="text" class="form-input" id="editStockNote" placeholder="Reason (optional)" style="flex:1">
+        <button class="btn btn-sm btn-primary" id="editStockConfirmBtn" onclick="doEditStock()">Confirm</button>
+        <button class="btn btn-sm btn-ghost" onclick="hideEditStock()">Cancel</button>
+      </div>
+      <div id="editStockResult" style="display:none;margin-top:6px" class="text-sm"></div>
+    </div>
+  </div>
+  <div class="card-body">
+    <form id="productForm">
+      <div class="form-group">
+        <label class="form-label">Product Name *</label>
+        <input class="form-input" name="name" id="pName" required placeholder="Enter product name" autofocus>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">SKU *</label>
+          <div class="input-with-btn">
+            <input class="form-input" name="sku" id="pSku" required placeholder="e.g. PRD-001">
+            <button type="button" class="btn btn-sm btn-ghost" onclick="generateSku()" title="Generate SKU">
+              <svg data-lucide="wand-2" style="width:14px;height:14px"></svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Barcode</label>
+          <input class="form-input" name="barcode" id="pBarcode" placeholder="Scan or enter barcode">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" name="category_id" id="pCategory"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Supplier</label>
+          <select class="form-select" name="supplier_id" id="pSupplier"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cost Price *</label>
+          <input class="form-input" type="number" step="0.01" min="0" name="cost_price" id="pCost" required placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Selling Price *</label>
+          <input class="form-input" type="number" step="0.01" min="0" name="selling_price" id="pPrice" required placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tax Rate (%)</label>
+          <input class="form-input" type="number" step="0.1" min="0" max="100" name="tax_rate" id="pTax" value="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <select class="form-select" name="unit" id="pUnit">
+            <option value="pcs">Pieces</option>
+            <option value="kg">Kilogram</option>
+            <option value="liter">Liter</option>
+            <option value="box">Box</option>
+            <option value="meter">Meter</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Min Stock Level</label>
+          <input class="form-input" type="number" min="0" name="min_stock_level" id="pMinStock" value="0" placeholder="0">
+        </div>
+        <div class="form-group" id="initialStockGroup">
+          <label class="form-label">Initial Stock Qty</label>
+          <input class="form-input" type="number" min="0" name="initial_stock" id="pInitialStock" value="0" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" name="description" id="pDesc" rows="3" placeholder="Optional description"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save Product</button>
+        <button type="button" class="btn btn-ghost" onclick="window.history.back()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+<style>
+.input-with-btn { display:flex; gap:4px; }
+.input-with-btn .form-input { flex:1; }
+</style>
+<script>
+function generateSku() {
+  const name = document.getElementById('pName').value.trim();
+  const prefix = name ? name.substring(0, 3).toUpperCase() : 'PRD';
+  const num = String(Date.now()).slice(-6);
+  document.getElementById('pSku').value = `${prefix}-${num}`;
+}
+
+function generateSkuFromName() {
+  const sku = document.getElementById('pSku');
+  if (!sku.value) generateSku();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const productId = window.location.pathname.match(/\/products\/(\d+)/)?.[1];
+  document.getElementById('formTitle').textContent = productId ? 'Edit Product' : 'Add Product';
+  document.getElementById('submitBtn').textContent = productId ? 'Update Product' : 'Save Product';
+
+  if (!productId) document.getElementById('pName').addEventListener('blur', generateSkuFromName);
+
+  try {
+    const cats = await API.get('/categories');
+    const sel = document.getElementById('pCategory');
+    sel.innerHTML = '<option value="">Select category</option>' + cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  } catch(e) {}
+
+  try {
+    const supps = await API.get('/suppliers', { limit: 100 });
+    const sel = document.getElementById('pSupplier');
+    sel.innerHTML = '<option value="">Select supplier</option>' + (supps.rows || []).map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  } catch(e) {}
+
+  if (productId) {
+    document.getElementById('initialStockGroup').style.display = 'none';
+    try {
+      const p = await API.get('/products/' + productId);
+      document.getElementById('pName').value = p.name;
+      document.getElementById('pSku').value = p.sku;
+      document.getElementById('pBarcode').value = p.barcode || '';
+      document.getElementById('pCategory').value = p.category_id || '';
+      document.getElementById('pSupplier').value = p.supplier_id || '';
+      document.getElementById('pCost').value = p.cost_price;
+      document.getElementById('pPrice').value = p.selling_price;
+      document.getElementById('pTax').value = p.tax_rate;
+      document.getElementById('pMinStock').value = p.min_stock_level;
+      document.getElementById('pUnit').value = p.unit;
+      document.getElementById('pDesc').value = p.description || '';
+      // Stock adjustment UI
+      updateStockDisplay(p.stock_quantity || 0, p.unit || 'pcs', p.min_stock_level || 0);
+    } catch(e) { showToast('Failed to load product', 'error'); }
+  }
+
+  document.getElementById('productForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.cost_price = parseFloat(data.cost_price) || 0;
+    data.selling_price = parseFloat(data.selling_price) || 0;
+    data.tax_rate = parseFloat(data.tax_rate) || 0;
+    data.min_stock_level = parseInt(data.min_stock_level) || 0;
+    data.category_id = data.category_id ? parseInt(data.category_id) : null;
+    data.supplier_id = data.supplier_id ? parseInt(data.supplier_id) : null;
+    const initialStock = parseInt(data.initial_stock) || 0;
+    delete data.initial_stock;
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      if (productId) {
+        await API.put('/products/' + productId, data);
+        showToast('Product updated!', 'success');
+      } else {
+        const created = await API.post('/products', data);
+        if (initialStock > 0) {
+          await API.post('/inventory/adjust/' + created.id, { quantity: initialStock, type: 'purchase', notes: 'Initial stock on creation' });
+        }
+        showToast('Product created!', 'success');
+      }
+      window.location.href = '/app/products';
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = productId ? 'Update Product' : 'Save Product';
+    }
+  });
+
+  try { lucide.createIcons(); } catch(e) {}
+});
+
+// ---- Stock Adjustment ----
+let editMode = 'add'; // 'add' or 'remove'
+
+function updateStockDisplay(qty, unit, minStock) {
+  const card = document.getElementById('editStockCard');
+  card.style.display = 'block';
+  document.getElementById('editCurrentStock').textContent = qty;
+  document.getElementById('editStockUnit').textContent = unit;
+  const statusEl = document.getElementById('editStockStatus');
+  if (qty <= 0) {
+    statusEl.textContent = 'Out of Stock';
+    statusEl.className = 'badge badge-danger text-sm';
+  } else if (qty <= minStock) {
+    statusEl.textContent = 'Low Stock';
+    statusEl.className = 'badge badge-warning text-sm';
+  } else {
+    statusEl.textContent = 'In Stock';
+    statusEl.className = 'badge badge-success text-sm';
+  }
+}
+
+function showEditRestock() {
+  editMode = 'add';
+  document.getElementById('editStockActions').style.display = 'block';
+  document.getElementById('editStockQty').value = 10;
+  document.getElementById('editStockNote').value = '';
+  document.getElementById('editStockQty').focus();
+  document.getElementById('editStockQty').select();
+  document.getElementById('editStockConfirmBtn').textContent = 'Add Stock';
+  document.getElementById('editStockConfirmBtn').className = 'btn btn-sm btn-primary';
+  document.getElementById('editStockResult').style.display = 'none';
+}
+
+function showEditCut() {
+  editMode = 'remove';
+  document.getElementById('editStockActions').style.display = 'block';
+  document.getElementById('editStockQty').value = 1;
+  document.getElementById('editStockNote').value = '';
+  document.getElementById('editStockQty').focus();
+  document.getElementById('editStockQty').select();
+  document.getElementById('editStockConfirmBtn').textContent = 'Remove Stock';
+  document.getElementById('editStockConfirmBtn').className = 'btn btn-sm btn-danger';
+  document.getElementById('editStockResult').style.display = 'none';
+}
+
+function hideEditStock() {
+  document.getElementById('editStockActions').style.display = 'none';
+  document.getElementById('editStockResult').style.display = 'none';
+}
+
+async function doEditStock() {
+  const productId = window.location.pathname.match(/\/products\/(\d+)/)?.[1];
+  if (!productId) return;
+  const rawQty = parseInt(document.getElementById('editStockQty').value) || 0;
+  if (rawQty <= 0) { showToast('Enter a valid quantity', 'warning'); return; }
+  const notes = document.getElementById('editStockNote').value.trim() || (editMode === 'add' ? 'Restocked from edit page' : 'Stock removed from edit page');
+  const btn = document.getElementById('editStockConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+  try {
+    if (editMode === 'add') {
+      const res = await API.post('/inventory/restock/' + productId, { quantity: rawQty, notes });
+      document.getElementById('editStockResult').innerHTML = `<span style="color:var(--color-success)">✓ Added ${rawQty} units (${res.previous_qty} → ${res.new_qty})</span>`;
+    } else {
+      const res = await API.post('/inventory/adjust/' + productId, { quantity: rawQty, type: 'removal', notes });
+      document.getElementById('editStockResult').innerHTML = `<span style="color:var(--color-danger)">✓ Removed ${rawQty} units (was ${res.previous_qty}, now ${res.new_qty})</span>`;
+    }
+    document.getElementById('editStockResult').style.display = 'block';
+    btn.textContent = 'Done!';
+    // Refresh stock display
+    const p = await API.get('/products/' + productId);
+    updateStockDisplay(p.stock_quantity || 0, p.unit || 'pcs', p.min_stock_level || 0);
+    setTimeout(hideEditStock, 1500);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = editMode === 'add' ? 'Add Stock' : 'Remove Stock';
+  }
+}
+</script>

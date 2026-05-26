@@ -1,0 +1,35 @@
+<div class="page-header">
+  <h1>Expenses</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="showExpenseModal()">
+      <svg data-lucide="plus" style="width:16px;height:16px"></svg>
+      Add Expense
+    </button>
+  </div>
+</div>
+<div class="table-wrap">
+  <div class="card-body" id="expensesList">
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const res = await API.get('/expenses', { limit: 30 });
+  const el = document.getElementById('expensesList');
+  const rows = res.rows || [];
+  if (rows.length === 0) { el.innerHTML = '<div class="empty-state"><svg data-lucide="wallet"></svg><p>No expenses</p></div>'; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Category</th><th>Amount</th><th>Description</th><th>Date</th></tr></thead><tbody>' +
+    rows.map(e => '<tr><td><span class="badge badge-info">' + escapeHtml(e.category) + '</span></td><td class="font-semibold">' + formatCurrency(e.amount) + '</td><td class="text-sm text-secondary">' + escapeHtml(e.description || '-') + '</td><td class="text-sm text-secondary">' + formatDate(e.expense_date) + '</td></tr>').join('') +
+    '</tbody></table>';
+  try { lucide.createIcons(); } catch(e) {}
+});
+async function showExpenseModal() {
+  const category = prompt('Category (rent/electricity/salary/etc):');
+  if (!category) return;
+  const amount = parseFloat(prompt('Amount:'));
+  if (!amount) return;
+  const description = prompt('Description (optional):');
+  try { await API.post('/expenses', { category, amount, description }); showToast('Expense added', 'success'); window.location.reload(); }
+  catch(e) { showToast(e.message, 'error'); }
+}
+</script>

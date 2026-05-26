@@ -41,7 +41,7 @@ Professional retail management software with POS, inventory tracking, billing, a
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/GI-STANDARDS/Shop-Management-Software
 cd store-management
 
 # Install dependencies

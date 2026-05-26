@@ -41,7 +41,7 @@ Professional retail management software with POS, inventory tracking, billing, a
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/GI-STANDARDS/Shop-Management-Software
 cd store-management
 
 # Install dependencies
@@ -193,7 +193,3 @@ Stock quantities are maintained via a database trigger (`trg_inventory_sync_curr
 - **Sale/Removal** → `-quantity`
 
 This guarantees consistency regardless of code path.
-
-## License
-
-MIT

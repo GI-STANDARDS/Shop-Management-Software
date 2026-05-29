@@ -191,5 +191,3 @@ Stock quantities are maintained via a database trigger (`trg_inventory_sync_curr
 
 - **Purchase/Restock/Return** → `+quantity`
 - **Sale/Removal** → `-quantity`
-
-This guarantees consistency regardless of code path.
